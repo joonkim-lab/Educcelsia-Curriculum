@@ -1316,7 +1316,7 @@ function renderTrack(track) {
   data.weeks.forEach((w, i) => {
     const key     = track + '_w' + w.week;
     const isDone  = !!userProgress[key];
-    const isOpen  = !isDone && (i === 0 || !!userProgress[track + '_w' + data.weeks[i-1].week]);
+    const isOpen  = !isDone 
     const score   = isDone ? userProgress[key].score : null;
     const numCls  = isDone ? 'wnum-done' : isOpen ? 'wnum-active' : 'wnum-lock';
     const badgeCls= isDone ? 'b-done'    : isOpen ? 'b-active'    : 'b-lock';
