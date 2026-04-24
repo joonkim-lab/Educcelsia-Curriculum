@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EOS 커리큘럼</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+<script src="curriculum.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+
+  :root {
+    --bg: #f5f0e8;
+    --card-bg: #fffef9;
+    --ink: #1a1410;
+    --ink-light: #6b5f52;
+    --accent: #c0392b;
+    --accent-blue: #1a5276;
+    --border: #d4c9b8;
+    --shadow: rgba(0,0,0,0.08);
+    --serif: 'Noto Serif KR', serif;
+    --sans: 'Noto Sans KR', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+  }
+
+  /* ── LOGIN ── */
+  #login-screen {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100vh; gap: 2rem; padding: 2rem;
+    background: var(--bg);
+  }
+  .login-logo { font-family: var(--serif); font-size: 2rem; font-weight: 700; letter-spacing: 0.1em; }
+  .login-sub { color: var(--ink-light); font-size: 0.9rem; }
+  .btn-google {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.85rem 2rem; background: var(--card-bg);
+    border: 1.5px solid var(--border); border-radius: 4px;
+    font-family: var(--sans); font-size: 1rem; cursor: pointer;
+    transition: all 0.2s; box-shadow: 0 2px 8px var(--shadow);
+  }
+  .btn-google:hover { border-color: var(--ink); transform: translateY(-1px); }
+
+  /* ── HEADER ── */
+  header {
+    position: sticky; top: 0; z-index: 100;
+    background: var(--card-bg); border-bottom: 1.5px solid var(--border);
+    padding: 0.75rem 2rem;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .logo { font-family: var(--serif); font-size: 1.2rem; font-weight: 700; }
+  .user-info { display: flex; align-items: center; gap: 1rem; font-size: 0.85rem; color: var(--ink-light); }
+  .btn-signout {
+    padding: 0.3rem 0.75rem; border: 1px solid var(--border);
+    background: transparent; border-radius: 3px; cursor: pointer; font-size: 0.8rem;
+    transition: all 0.2s;
+  }
+  .btn-signout:hover { background: var(--bg); }
+
+  /* ── MAIN LAYOUT ── */
+  #app { display: none; }
+  .app-inner { max-width: 1100px; margin: 0 auto; padding: 2rem; }
+
+  /* ── TRACK TABS ── */
+  .track-tabs {
+    display: flex; gap: 0.5rem; margin-bottom: 2rem;
+    border-bottom: 2px solid var(--border); padding-bottom: 0;
+  }
+  .track-tab {
+    padding: 0.6rem 1.5rem; font-family: var(--sans); font-size: 0.9rem;
+    background: transparent; border: none; border-bottom: 3px solid transparent;
+    cursor: pointer; color: var(--ink-light); transition: all 0.2s;
+    margin-bottom: -2px;
+  }
+  .track-tab.active { color: var(--ink); border-bottom-color: currentColor; font-weight: 700; }
+
+  /* ── WEEK GRID ── */
+  .week-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem;
+  }
+  .week-card {
+    background: var(--card-bg); border: 1.5px solid var(--border);
+    border-radius: 6px; padding: 1.25rem;
+    cursor: pointer; transition: all 0.2s;
+    position: relative; overflow: hidden;
+  }
+  .week-card::before {
+    content: ''; position: absolute; top: 0; left: 0;
+    width: 4px; height: 100%; background: var(--track-color, var(--accent));
+  }
+  .week-card:hover:not(.locked) { transform: translateY(-2px); box-shadow: 0 6px 20px var(--shadow); }
+  .week-card.done { opacity: 0.7; }
+  .week-card.done::after {
+    content: '✓'; position: absolute; top: 0.75rem; right: 0.75rem;
+    width: 22px; height: 22px; background: #27ae60; color: white;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 0.75rem; font-weight: 700;
+  }
+  .week-card.locked { opacity: 0.45; cursor: default; }
+  .week-num { font-size: 0.75rem; color: var(--ink-light); margin-bottom: 0.4rem; }
+  .week-title { font-size: 0.88rem; font-weight: 500; line-height: 1.4; }
+
+  /* ── READING CARD VIEW ── */
+  #week-view { display: none; }
+  .wv-inner { max-width: 800px; margin: 0 auto; padding: 2rem; }
+
+  .wv-back {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    font-size: 0.85rem; color: var(--ink-light); cursor: pointer;
+    border: none; background: transparent; padding: 0.25rem 0;
+    margin-bottom: 1.5rem; transition: color 0.2s;
+  }
+  .wv-back:hover { color: var(--ink); }
+
+  .wv-header {
+    border-bottom: 2px solid var(--ink); padding-bottom: 1rem; margin-bottom: 2rem;
+  }
+  .wv-track-badge {
+    display: inline-block; font-size: 0.75rem; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 0.2rem 0.6rem; border: 1.5px solid currentColor;
+    border-radius: 2px; margin-bottom: 0.75rem;
+  }
+  .wv-week-label { font-size: 0.85rem; color: var(--ink-light); margin-bottom: 0.4rem; }
+  .wv-title { font-family: var(--serif); font-size: 1.6rem; line-height: 1.3; }
+  .wv-link {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    font-size: 0.8rem; color: var(--ink-light); text-decoration: none;
+    margin-top: 0.75rem; border-bottom: 1px solid transparent;
+    transition: all 0.2s;
+  }
+  .wv-link:hover { color: var(--ink); border-bottom-color: var(--ink); }
+
+  /* 독서 카드 안내 */
+  .reading-card-intro {
+    background: var(--card-bg); border: 1.5px solid var(--border);
+    border-radius: 6px; padding: 1.25rem 1.5rem;
+    margin-bottom: 2rem; display: flex; gap: 1rem; align-items: flex-start;
+  }
+  .reading-card-intro .intro-icon { font-size: 1.5rem; flex-shrink: 0; }
+  .reading-card-intro p { font-size: 0.88rem; color: var(--ink-light); line-height: 1.6; }
+  .reading-card-intro strong { color: var(--ink); }
+
+  /* ── 문항 섹션 ── */
+  .question-section {
+    background: var(--card-bg); border: 1.5px solid var(--border);
+    border-radius: 6px; margin-bottom: 1rem; overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .question-section:focus-within { border-color: var(--ink); }
+
+  .qs-header {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 1rem 1.25rem; border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .qs-icon { font-size: 1.1rem; }
+  .qs-label { font-weight: 700; font-size: 0.9rem; }
+  .qs-points { margin-left: auto; font-size: 0.78rem; color: var(--ink-light); }
+
+  .qs-description { padding: 0.85rem 1.25rem; font-size: 0.88rem; color: var(--ink-light); line-height: 1.6; }
+
+  .qs-body { padding: 0 1.25rem 1.25rem; }
+  .qs-textarea {
+    width: 100%; min-height: 120px; padding: 0.85rem 1rem;
+    border: 1.5px solid var(--border); border-radius: 4px;
+    font-family: var(--sans); font-size: 0.9rem; line-height: 1.7;
+    background: var(--bg); color: var(--ink); resize: vertical;
+    transition: border-color 0.2s;
+  }
+  .qs-textarea:focus { outline: none; border-color: var(--ink); background: white; }
+  .qs-textarea::placeholder { color: #bbb; }
+
+  /* Q5 옵션 선택 */
+  .q5-options { display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap; }
+  .q5-option {
+    padding: 0.5rem 1rem; border: 1.5px solid var(--border);
+    border-radius: 20px; font-size: 0.85rem; cursor: pointer;
+    background: var(--bg); transition: all 0.2s;
+  }
+  .q5-option:hover { border-color: var(--ink-light); }
+  .q5-option.selected { border-color: var(--ink); background: var(--ink); color: white; }
+
+  /* ── 하단 액션 바 ── */
+  .action-bar {
+    display: flex; gap: 0.75rem; justify-content: flex-end;
+    padding: 1.5rem 0; flex-wrap: wrap;
+  }
+  .btn {
+    padding: 0.75rem 1.5rem; border-radius: 4px; font-family: var(--sans);
+    font-size: 0.9rem; font-weight: 500; cursor: pointer; transition: all 0.2s;
+    display: inline-flex; align-items: center; gap: 0.4rem;
+  }
+  .btn-primary {
+    background: var(--ink); color: white; border: 1.5px solid var(--ink);
+  }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-secondary {
+    background: var(--card-bg); color: var(--ink); border: 1.5px solid var(--border);
+  }
+  .btn-secondary:hover { border-color: var(--ink); }
+  .btn-print {
+    background: var(--card-bg); color: var(--ink-light); border: 1.5px solid var(--border);
+  }
+  .btn-print:hover { color: var(--ink); border-color: var(--ink); }
+
+  /* ── 채점 결과 ── */
+  #result-view { display: none; }
+  .rv-inner { max-width: 800px; margin: 0 auto; padding: 2rem; }
+
+  /* ── 독서 카드 프리뷰 (제출 후) ── */
+  .reading-card-preview {
+    background: var(--card-bg);
+    border: 2px solid var(--ink);
+    border-radius: 6px;
+    padding: 0;
+    margin-bottom: 2rem;
+    overflow: hidden;
+    font-family: var(--serif);
+  }
+  .rc-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 2px solid var(--ink);
+    display: flex; justify-content: space-between; align-items: flex-start;
+  }
+  .rc-title-area h2 { font-size: 1.1rem; line-height: 1.4; margin-bottom: 0.3rem; }
+  .rc-title-area .rc-meta { font-size: 0.78rem; color: var(--ink-light); font-family: var(--sans); }
+  .rc-badge {
+    font-size: 0.72rem; font-family: var(--sans); font-weight: 700;
+    letter-spacing: 0.06em; padding: 0.2rem 0.6rem;
+    border: 1.5px solid currentColor; border-radius: 2px; white-space: nowrap;
+  }
+  .rc-body { padding: 1.25rem 1.5rem; }
+  .rc-row {
+    display: grid; grid-template-columns: 140px 1fr;
+    gap: 0 1rem; padding: 0.85rem 0;
+    border-bottom: 1px solid var(--border);
+    align-items: start;
+  }
+  .rc-row:last-child { border-bottom: none; }
+  .rc-field-label {
+    font-size: 0.78rem; color: var(--ink-light); font-family: var(--sans);
+    font-weight: 700; letter-spacing: 0.04em; padding-top: 0.1rem;
+  }
+  .rc-field-content { font-size: 0.9rem; line-height: 1.7; white-space: pre-wrap; }
+
+  .rc-footer {
+    background: var(--bg); padding: 0.85rem 1.5rem;
+    border-top: 1px solid var(--border);
+    display: flex; gap: 0.75rem; justify-content: flex-end;
+  }
+
+  /* ── AI 채점 영역 ── */
+  .score-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1.5rem;
+  }
+  .score-total {
+    font-family: var(--serif); font-size: 2.5rem; font-weight: 700;
+  }
+  .score-label { font-size: 0.85rem; color: var(--ink-light); }
+
+  .score-breakdown { display: flex; gap: 0.5rem; margin-bottom: 2rem; flex-wrap: wrap; }
+  .score-chip {
+    padding: 0.4rem 0.75rem; border: 1px solid var(--border);
+    border-radius: 3px; font-size: 0.82rem; background: var(--card-bg);
+  }
+  .score-chip .sc-label { color: var(--ink-light); }
+  .score-chip .sc-val { font-weight: 700; margin-left: 0.3rem; }
+
+  .feedback-section {
+    background: var(--card-bg); border: 1.5px solid var(--border);
+    border-radius: 6px; padding: 1.25rem; margin-bottom: 1rem;
+  }
+  .fb-q-label { font-weight: 700; font-size: 0.88rem; margin-bottom: 0.5rem; }
+  .fb-score { display: inline-block; font-size: 0.8rem; color: var(--ink-light); margin-bottom: 0.4rem; }
+  .fb-text { font-size: 0.9rem; line-height: 1.7; color: var(--ink-light); }
+
+  .loading-msg {
+    text-align: center; padding: 3rem; color: var(--ink-light);
+    font-size: 0.9rem;
+  }
+  .loading-msg .spinner {
+    width: 32px; height: 32px; border: 3px solid var(--border);
+    border-top-color: var(--ink); border-radius: 50%;
+    animation: spin 0.8s linear infinite; margin: 0 auto 1rem;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── 프린트 스타일 ── */
+  @media print {
+    header, .wv-back, .action-bar, .rc-footer, #week-view .question-section,
+    .reading-card-intro, .track-tabs, .week-grid, #login-screen,
+    .score-header, .score-breakdown, .feedback-section { display: none !important; }
+
+    body { background: white; }
+    .reading-card-preview { border-color: black; page-break-inside: avoid; }
+    .rc-row { border-bottom-color: #ccc; }
+    .rv-inner { padding: 0; }
+  }
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen">
+  <div class="login-logo">EOS 커리큘럼</div>
+  <div class="login-sub">Educcelsia · 롱블랙 독서 커리큘럼</div>
+  <button class="btn-google" onclick="signIn()">
+    <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.2 1.5 8.1 2.8l6-5.8C34.4 3.3 29.6 1 24 1 14.8 1 7 6.7 3.7 14.8l7 5.4C12.4 13.3 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v8.5h12.5c-.5 2.9-2.2 5.3-4.7 7l7.1 5.5c4.2-3.9 6.7-9.6 7.2-16.5z"/><path fill="#FBBC05" d="M10.7 28.6c-.4-1.2-.6-2.4-.6-3.6s.2-2.4.6-3.6l-7-5.4C2.3 18.5 1 21.1 1 24s1.3 5.5 3.7 8l7-5.4z"/><path fill="#34A853" d="M24 47c5.6 0 10.3-1.8 13.7-5l-7.1-5.5c-1.9 1.3-4.3 2-6.6 2-6.3 0-11.6-4.2-13.4-9.9l-7 5.4C7 41.3 14.8 47 24 47z"/></svg>
+    Google로 로그인
+  </button>
+</div>
+
+<!-- APP -->
+<div id="app">
+  <header>
+    <div class="logo">EOS 커리큘럼</div>
+    <div class="user-info">
+      <span id="user-name"></span>
+      <button class="btn-signout" onclick="signOut()">로그아웃</button>
+    </div>
+  </header>
+
+  <!-- 커리큘럼 목록 -->
+  <div id="list-view">
+    <div class="app-inner">
+      <div class="track-tabs" id="track-tabs"></div>
+      <div class="week-grid" id="week-grid"></div>
+    </div>
+  </div>
+
+  <!-- 아티클 풀기 (독서 카드 작성) -->
+  <div id="week-view">
+    <div class="wv-inner">
+      <button class="wv-back" onclick="showList()">← 목록으로</button>
+      <div class="wv-header">
+        <div class="wv-track-badge" id="wv-badge"></div>
+        <div class="wv-week-label" id="wv-week-label"></div>
+        <h1 class="wv-title" id="wv-title"></h1>
+        <a class="wv-link" id="wv-link" target="_blank">📖 롱블랙에서 읽기 →</a>
+      </div>
+
+      <div class="reading-card-intro">
+        <div class="intro-icon">🃏</div>
+        <p>아티클을 읽고 아래 항목을 채우면 <strong>독서 카드</strong>가 완성돼요.
+        Q1~Q4는 카드에 기록되고, Q5는 AI가 채점합니다.
+        완성된 카드는 <strong>저장하거나 프린트</strong>할 수 있어요.</p>
+      </div>
+
+      <div id="questions-container"></div>
+
+      <div class="action-bar">
+        <button class="btn btn-print" onclick="printCard()">🖨️ 미리보기 / 프린트</button>
+        <button class="btn btn-secondary" onclick="saveDraft()">💾 임시저장</button>
+        <button class="btn btn-primary" onclick="submitAnswers()">제출 및 AI 채점 →</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 채점 결과 -->
+  <div id="result-view">
+    <div class="rv-inner">
+      <button class="wv-back" onclick="showWeekView()">← 다시 보기</button>
+      <div id="result-content"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 프린트 모달 -->
+<div id="print-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:200; align-items:center; justify-content:center;">
+  <div style="background:white; max-width:700px; width:95%; max-height:90vh; overflow-y:auto; border-radius:8px; padding:2rem;">
+    <div id="print-card-content"></div>
+    <div style="display:flex; gap:0.75rem; justify-content:flex-end; margin-top:1.5rem; border-top:1px solid #ddd; padding-top:1.25rem;">
+      <button class="btn btn-secondary" onclick="document.getElementById('print-modal').style.display='none'">닫기</button>
+      <button class="btn btn-primary" onclick="window.print()">🖨️ 프린트</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Firebase 설정 ──
+const firebaseConfig = {
+  apiKey: "AIzaSyDemoKeyReplace",
+  authDomain: "educcelsia-curriculum.firebaseapp.com",
+  projectId: "educcelsia-curriculum",
+  storageBucket: "educcelsia-curriculum.appspot.com",
+  messagingSenderId: "000000000000",
+  appId: "1:000000000000:web:0000000000000000"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// ── 상태 ──
+let currentUser = null;
+let currentTrack = 'branding1';
+let currentWeek = null;
+let userProgress = {};
+let draftAnswers = {};
+
+// ── 인증 ──
+auth.onAuthStateChanged(async (user) => {
+  if (user) {
+    currentUser = user;
+    document.getElementById('user-name').textContent = user.displayName || user.email;
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    await loadProgress();
+    renderTrackTabs();
+    renderWeekGrid();
+  } else {
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+  }
+});
+
+function signIn() {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch(e => alert('로그인 실패: ' + e.message));
+}
+function signOut() { auth.signOut(); }
+
+// ── 진도 로드 ──
+async function loadProgress() {
+  try {
+    const doc = await db.collection('progress').doc(currentUser.uid).get();
+    userProgress = doc.exists ? doc.data() : {};
+  } catch(e) { userProgress = {}; }
+}
+
+// ── 트랙 탭 ──
+function renderTrackTabs() {
+  const tabs = document.getElementById('track-tabs');
+  tabs.innerHTML = Object.entries(CURRICULUM).map(([key, track]) =>
+    `<button class="track-tab ${key===currentTrack?'active':''}"
+      style="${key===currentTrack?`border-bottom-color:${track.color};color:${track.color}`:'color:var(--ink-light)'}"
+      onclick="switchTrack('${key}')">${track.title}</button>`
+  ).join('');
+}
+
+function switchTrack(key) {
+  currentTrack = key;
+  renderTrackTabs();
+  renderWeekGrid();
+}
+
+// ── 주차 그리드 ──
+function renderWeekGrid() {
+  const track = CURRICULUM[currentTrack];
+  const grid = document.getElementById('week-grid');
+  grid.innerHTML = track.weeks.map((w, i) => {
+    const key = currentTrack + '_w' + w.week;
+    const done = !!userProgress[key];
+    const isOpen = true; // 전체 잠금 해제
+    return `<div class="week-card ${done?'done':''} ${isOpen?'':'locked'}"
+      style="--track-color:${track.color}"
+      onclick="${isOpen?`openWeek(${i})`:''}"
+    >
+      <div class="week-num">${track.title} · ${w.week}주차</div>
+      <div class="week-title">${w.title}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── 주차 열기 ──
+function openWeek(idx) {
+  currentWeek = { track: currentTrack, idx };
+  const track = CURRICULUM[currentTrack];
+  const w = track.weeks[idx];
+  const key = currentTrack + '_w' + w.week;
+
+  // 헤더 채우기
+  const badge = document.getElementById('wv-badge');
+  badge.textContent = track.title;
+  badge.style.color = track.color;
+
+  document.getElementById('wv-week-label').textContent = `${w.week}주차`;
+  document.getElementById('wv-title').textContent = w.title;
+  const link = document.getElementById('wv-link');
+  link.href = 'https://' + w.url;
+
+  // 저장된 답변 로드
+  draftAnswers = (userProgress[key] && userProgress[key].answers) ? {...userProgress[key].answers} : {};
+
+  // 문항 렌더링
+  renderQuestions(w);
+
+  document.getElementById('list-view').style.display = 'none';
+  document.getElementById('week-view').style.display = 'block';
+  document.getElementById('result-view').style.display = 'none';
+  window.scrollTo(0, 0);
+}
+
+// ── 문항 렌더링 ──
+function renderQuestions(w) {
+  const container = document.getElementById('questions-container');
+  container.innerHTML = w.questions.map(q => {
+    if (q.isQ5) {
+      return renderQ5(q);
+    }
+    return `
+      <div class="question-section">
+        <div class="qs-header">
+          <span class="qs-icon">${q.icon}</span>
+          <span class="qs-label">${q.label}</span>
+          <span class="qs-points">${q.points}점</span>
+        </div>
+        <div class="qs-description">${q.description}</div>
+        <div class="qs-body">
+          <textarea class="qs-textarea" id="ans-${q.id}"
+            placeholder="${q.placeholder}"
+            oninput="draftAnswers['${q.id}']=this.value"
+          >${draftAnswers[q.id]||''}</textarea>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderQ5(q) {
+  const savedOption = draftAnswers['q5_option'] || '';
+  const savedText = draftAnswers['q5'] || '';
+  const optionText = Q5_OPTIONS.find(o=>o.id===savedOption)?.text || '';
+  return `
+    <div class="question-section">
+      <div class="qs-header">
+        <span class="qs-icon">${q.icon}</span>
+        <span class="qs-label">${q.label} — 나만의 연결 (AI 채점)</span>
+        <span class="qs-points">${q.points}점</span>
+      </div>
+      <div class="qs-description">연결 방식을 선택한 뒤, 아티클과의 연결을 구체적으로 작성하세요.</div>
+      <div class="qs-body">
+        <div class="q5-options">
+          ${Q5_OPTIONS.map(o=>`
+            <button class="q5-option ${savedOption===o.id?'selected':''}"
+              onclick="selectQ5Option('${o.id}')">${o.label}</button>
+          `).join('')}
+        </div>
+        <div id="q5-question-text" style="font-size:0.85rem;color:var(--ink-light);margin-bottom:0.75rem;line-height:1.6;">
+          ${optionText}
+        </div>
+        <textarea class="qs-textarea" id="ans-q5"
+          placeholder="선택한 연결 방식에 맞게 구체적으로 작성하세요."
+          oninput="draftAnswers['q5']=this.value"
+        >${savedText}</textarea>
+      </div>
+    </div>`;
+}
+
+function selectQ5Option(optionId) {
+  draftAnswers['q5_option'] = optionId;
+  const opt = Q5_OPTIONS.find(o=>o.id===optionId);
+  document.querySelectorAll('.q5-option').forEach(b=>{
+    b.classList.toggle('selected', b.textContent.trim() === opt.label);
+  });
+  document.getElementById('q5-question-text').textContent = opt.text;
+}
+
+// ── 임시저장 ──
+async function saveDraft() {
+  if (!currentWeek) return;
+  const { track, idx } = currentWeek;
+  const w = CURRICULUM[track].weeks[idx];
+  const key = track + '_w' + w.week;
+  try {
+    await db.collection('progress').doc(currentUser.uid).set({
+      [key]: { answers: draftAnswers, savedAt: new Date().toISOString() }
+    }, { merge: true });
+    alert('임시저장 완료!');
+  } catch(e) { alert('저장 실패: ' + e.message); }
+}
+
+// ── 독서 카드 생성 HTML ──
+function buildCardHTML(w, track, answers) {
+  const trackInfo = CURRICULUM[track];
+  const cardFields = getCardFields(w, answers);
+  const q5Option = Q5_OPTIONS.find(o=>o.id===answers['q5_option']);
+  return `
+    <div class="reading-card-preview">
+      <div class="rc-header">
+        <div class="rc-title-area">
+          <h2>${w.title}</h2>
+          <div class="rc-meta">${trackInfo.title} · ${w.week}주차</div>
+        </div>
+        <div class="rc-badge" style="color:${trackInfo.color}">독서 카드</div>
+      </div>
+      <div class="rc-body">
+        ${cardFields.map(f=>`
+          <div class="rc-row">
+            <div class="rc-field-label">${f.icon} ${f.field}</div>
+            <div class="rc-field-content">${f.content || '<span style="color:#bbb">미작성</span>'}</div>
+          </div>`).join('')}
+        ${q5Option ? `
+          <div class="rc-row">
+            <div class="rc-field-label">🔗 나만의 연결</div>
+            <div class="rc-field-content">
+              <span style="font-size:0.8em;color:var(--ink-light);display:block;margin-bottom:0.3rem;">${q5Option.label}</span>
+              ${answers['q5'] || '<span style="color:#bbb">미작성</span>'}
+            </div>
+          </div>` : ''}
+      </div>
+    </div>`;
+}
+
+// ── 프린트 미리보기 ──
+function printCard() {
+  if (!currentWeek) return;
+  const { track, idx } = currentWeek;
+  const w = CURRICULUM[track].weeks[idx];
+  // 현재 입력값 수집
+  document.querySelectorAll('.qs-textarea').forEach(ta => {
+    const id = ta.id.replace('ans-', '');
+    draftAnswers[id] = ta.value;
+  });
+  const modal = document.getElementById('print-modal');
+  document.getElementById('print-card-content').innerHTML = buildCardHTML(w, track, draftAnswers);
+  modal.style.display = 'flex';
+}
+
+// ── 제출 & AI 채점 ──
+async function submitAnswers() {
+  if (!currentWeek) return;
+  document.querySelectorAll('.qs-textarea').forEach(ta => {
+    const id = ta.id.replace('ans-', '');
+    draftAnswers[id] = ta.value;
+  });
+
+  const { track, idx } = currentWeek;
+  const w = CURRICULUM[track].weeks[idx];
+  const key = track + '_w' + w.week;
+
+  // 최소 Q1~Q4 중 하나라도 작성 체크
+  const hasContent = ['q1','q2','q3','q4'].some(id => (draftAnswers[id]||'').trim().length > 10);
+  if (!hasContent) { alert('Q1~Q4 중 최소 하나 이상 작성해주세요.'); return; }
+
+  document.getElementById('week-view').style.display = 'none';
+  document.getElementById('result-view').style.display = 'block';
+  const resultContent = document.getElementById('result-content');
+
+  // 독서 카드 먼저 표시
+  const cardHTML = buildCardHTML(w, track, draftAnswers);
+  resultContent.innerHTML = cardHTML + `
+    <div class="rc-footer">
+      <button class="btn btn-print" onclick="printResultCard()">🖨️ 카드 프린트</button>
+      <button class="btn btn-secondary" onclick="saveCardAsText()">💾 텍스트로 저장</button>
+    </div>
+    <div id="ai-scoring" class="loading-msg">
+      <div class="spinner"></div>
+      Q5 AI 채점 중...
+    </div>`;
+
+  window.scrollTo(0, 0);
+
+  // API 키 확인
+  const apiKey = localStorage.getItem('eos_api_key');
+  if (!apiKey) {
+    document.getElementById('ai-scoring').innerHTML = `
+      <div style="padding:1.5rem;background:var(--card-bg);border:1.5px solid var(--border);border-radius:6px;">
+        <div style="font-weight:700;margin-bottom:0.5rem;">⚠️ AI 채점을 위한 API 키가 없어요</div>
+        <div style="font-size:0.88rem;color:var(--ink-light);margin-bottom:1rem;">API 키를 입력하시면 Q5 자동 채점이 가능합니다.</div>
+        <input id="api-key-input" type="password" placeholder="sk-ant-..." style="width:100%;padding:0.6rem;border:1.5px solid var(--border);border-radius:4px;font-size:0.9rem;margin-bottom:0.75rem;">
+        <button class="btn btn-primary" onclick="saveApiKeyAndScore()">저장 후 채점</button>
+      </div>`;
+    // Q1~Q4 수동 저장
+    await saveProgress(key, w, null);
+    return;
+  }
+
+  await scoreQ5(w, track, key, apiKey);
+}
+
+async function saveApiKeyAndScore() {
+  const key = document.getElementById('api-key-input').value.trim();
+  if (!key.startsWith('sk-ant-')) { alert('올바른 API 키 형식이 아닙니다.'); return; }
+  localStorage.setItem('eos_api_key', key);
+  const { track, idx } = currentWeek;
+  const w = CURRICULUM[track].weeks[idx];
+  const progressKey = track + '_w' + w.week;
+  document.getElementById('ai-scoring').innerHTML = '<div class="loading-msg"><div class="spinner"></div>채점 중...</div>';
+  await scoreQ5(w, track, progressKey, key);
+}
+
+async function scoreQ5(w, track, progressKey, apiKey) {
+  const q5 = w.questions.find(q=>q.isQ5);
+  const selectedOption = Q5_OPTIONS.find(o=>o.id===draftAnswers['q5_option']);
+  const q5Text = draftAnswers['q5'] || '';
+
+  if (!q5Text.trim() || !selectedOption) {
+    document.getElementById('ai-scoring').innerHTML = `
+      <div style="padding:1rem;border:1.5px solid var(--border);border-radius:6px;font-size:0.88rem;color:var(--ink-light);">
+        Q5를 작성하지 않았어요. Q1~Q4 독서 카드는 저장되었습니다.
+      </div>`;
+    await saveProgress(progressKey, w, null);
+    return;
+  }
+
+  const prompt = `
+롱블랙 아티클 독서 과제 채점입니다.
+
+아티클: "${w.title}"
+학습 트랙: ${CURRICULUM[track].title}
+
+Q5 연결 유형: ${selectedOption.label}
+Q5 질문: ${selectedOption.text}
+학생 답변: ${q5Text}
+
+채점 기준(4점):
+- 4점: 아티클 핵심 개념을 정확히 이해하고, 연결 유형에 맞게 깊이 있고 구체적으로 연결함
+- 3점: 아티클 내용을 이해하고 연결하나 구체성이 다소 부족함
+- 2점: 아티클과 연결을 시도했으나 피상적이거나 연결이 약함
+- 1점: 아티클과 무관하거나 연결이 없음
+
+아래 JSON 형식으로만 응답하세요:
+{
+  "score": 점수(1~4),
+  "feedback": "2~3문장 피드백 (친근하고 구체적으로)",
+  "strength": "잘한 점 한 가지",
+  "improvement": "개선할 점 한 가지"
+}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 600,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+
+    let result;
+    try {
+      const text = data.content[0].text.replace(/```json|```/g,'').trim();
+      result = JSON.parse(text);
+    } catch {
+      result = { score: 0, feedback: '채점 결과를 파싱할 수 없었어요.', strength: '', improvement: '' };
+    }
+
+    const q1to4Filled = ['q1','q2','q3','q4'].filter(id=>(draftAnswers[id]||'').trim()).length;
+    const totalScore = result.score + q1to4Filled; // Q1~Q4 각 1점(작성 여부) + Q5 AI 채점
+
+    document.getElementById('ai-scoring').innerHTML = `
+      <div style="border-top:2px solid var(--border);margin-top:1.5rem;padding-top:1.5rem;">
+        <div class="score-header">
+          <div>
+            <div class="score-label">Q5 나만의 연결 채점 결과</div>
+            <div class="score-total">${result.score}<span style="font-size:1rem;color:var(--ink-light)">/4점</span></div>
+          </div>
+          <div style="text-align:right;font-size:0.85rem;color:var(--ink-light);">
+            독서카드 완성도<br>
+            <span style="font-size:1.5rem;font-weight:700;color:var(--ink)">${q1to4Filled}/4</span> 항목 작성
+          </div>
+        </div>
+
+        <div class="feedback-section">
+          <div class="fb-q-label">💬 종합 피드백</div>
+          <div class="fb-text">${result.feedback}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+          <div class="feedback-section">
+            <div class="fb-q-label" style="color:#27ae60">✅ 잘한 점</div>
+            <div class="fb-text">${result.strength}</div>
+          </div>
+          <div class="feedback-section">
+            <div class="fb-q-label" style="color:#e67e22">💡 개선할 점</div>
+            <div class="fb-text">${result.improvement}</div>
+          </div>
+        </div>
+      </div>`;
+
+    await saveProgress(progressKey, w, result);
+
+  } catch(e) {
+    document.getElementById('ai-scoring').innerHTML = `
+      <div style="padding:1rem;border:1.5px solid #e74c3c;border-radius:6px;color:#c0392b;font-size:0.88rem;">
+        채점 오류: ${e.message}
+      </div>`;
+    await saveProgress(progressKey, w, null);
+  }
+}
+
+async function saveProgress(key, w, scoreResult) {
+  try {
+    await db.collection('progress').doc(currentUser.uid).set({
+      [key]: {
+        answers: draftAnswers,
+        score: scoreResult?.score || null,
+        submittedAt: new Date().toISOString()
+      }
+    }, { merge: true });
+    userProgress[key] = { answers: draftAnswers, submittedAt: new Date().toISOString() };
+  } catch(e) { console.warn('저장 실패', e); }
+}
+
+// ── 프린트 / 텍스트 저장 ──
+function printResultCard() {
+  window.print();
+}
+
+function saveCardAsText() {
+  if (!currentWeek) return;
+  const { track, idx } = currentWeek;
+  const w = CURRICULUM[track].weeks[idx];
+  const trackInfo = CURRICULUM[track];
+  const cardFields = getCardFields(w, draftAnswers);
+  const q5Option = Q5_OPTIONS.find(o=>o.id===draftAnswers['q5_option']);
+
+  let text = `📚 독서 카드\n`;
+  text += `${'='.repeat(40)}\n`;
+  text += `아티클: ${w.title}\n`;
+  text += `${trackInfo.title} · ${w.week}주차\n`;
+  text += `${'='.repeat(40)}\n\n`;
+
+  cardFields.forEach(f => {
+    text += `【${f.field}】\n${f.content || '(미작성)'}\n\n`;
+  });
+
+  if (q5Option) {
+    text += `【나만의 연결 — ${q5Option.label}】\n${draftAnswers['q5'] || '(미작성)'}\n\n`;
+  }
+
+  text += `${'='.repeat(40)}\n작성일: ${new Date().toLocaleDateString('ko-KR')}\n`;
+
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `독서카드_${w.week}주차_${w.title.slice(0,10)}.txt`;
+  a.click();
+}
+
+// ── 네비게이션 ──
+function showList() {
+  document.getElementById('list-view').style.display = 'block';
+  document.getElementById('week-view').style.display = 'none';
+  document.getElementById('result-view').style.display = 'none';
+  renderWeekGrid();
+}
+
+function showWeekView() {
+  document.getElementById('result-view').style.display = 'none';
+  document.getElementById('week-view').style.display = 'block';
+}
+</script>
+</body>
+</html>
